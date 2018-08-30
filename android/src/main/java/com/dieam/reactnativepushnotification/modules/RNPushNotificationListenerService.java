@@ -3,9 +3,11 @@ package com.dieam.reactnativepushnotification.modules;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningAppProcessInfo;
 import android.app.Application;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.util.Log;
 
 import com.dieam.reactnativepushnotification.helpers.ApplicationBadgeHelper;
@@ -111,18 +113,34 @@ public class RNPushNotificationListenerService extends GcmListenerService {
             Application applicationContext = (Application) context.getApplicationContext();
             RNPushNotificationHelper pushNotificationHelper = new RNPushNotificationHelper(applicationContext);
             pushNotificationHelper.sendToNotificationCentre(bundle);
+
+            if (!isScreenAwake()) {
+                PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+                PowerManager.WakeLock wl = powerManager.newWakeLock(PowerManager.FULL_WAKE_LOCK |PowerManager.ACQUIRE_CAUSES_WAKEUP |PowerManager.ON_AFTER_RELEASE,"MH24_SCREENLOCK");
+                wl.acquire(10000);
+                PowerManager.WakeLock wl_cpu = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"MH24_SCREENLOCK");
+                wl_cpu.acquire(10000);
+            }
         }
     }
 
+    private boolean isScreenAwake() {
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        Boolean isScreenAwake = (Build.VERSION.SDK_INT < 20? powerManager.isScreenOn():powerManager.isInteractive());
+        return isScreenAwake;
+    }
+
     private boolean isApplicationInForeground() {
-        ActivityManager activityManager = (ActivityManager) this.getSystemService(ACTIVITY_SERVICE);
-        List<RunningAppProcessInfo> processInfos = activityManager.getRunningAppProcesses();
-        if (processInfos != null) {
-            for (RunningAppProcessInfo processInfo : processInfos) {
-                if (processInfo.processName.equals(getApplication().getPackageName())) {
-                    if (processInfo.importance == RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
-                        for (String d : processInfo.pkgList) {
-                            return true;
+        if (isScreenAwake()) {
+            ActivityManager activityManager = (ActivityManager) this.getSystemService(ACTIVITY_SERVICE);
+            List<RunningAppProcessInfo> processInfos = activityManager.getRunningAppProcesses();
+            if (processInfos != null) {
+                for (RunningAppProcessInfo processInfo : processInfos) {
+                    if (processInfo.processName.equals(getApplication().getPackageName())) {
+                        if (processInfo.importance == RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+                            for (String d : processInfo.pkgList) {
+                                return true;
+                            }
                         }
                     }
                 }
